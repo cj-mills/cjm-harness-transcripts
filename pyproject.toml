@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cjm-harness-transcripts"
+version = "0.0.1"
+description = "The harness-transcript extraction lib (DEC e8b2f397 increment ii; the d774d311 build item): parse agent-harness session transcripts (Claude Code JSONL first) into their append-only record DAG, walk the active path, extract user-facing prose both sides, and derive the transcript <-> on-graph session-key mapping. Pure-parse, zero graph dependencies — one extraction truth for the live scratchpad pull, the archive-absorb instrument, and the housekeeping miner. Born on-graph."
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "Apache-2.0"}
+authors = [{name = "Christian J. Mills", email = "9126128+cj-mills@users.noreply.github.com"}]
+classifiers = ["Programming Language :: Python :: 3", "Programming Language :: Python :: 3 :: Only"]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/cj-mills/cjm-harness-transcripts"
+
+[tool.setuptools.packages.find]
+include = ["cjm_harness_transcripts*"]
