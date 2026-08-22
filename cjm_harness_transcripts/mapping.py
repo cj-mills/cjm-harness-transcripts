@@ -22,8 +22,10 @@ from pathlib import Path
 
 from .records import load_records
 
-# The boot-prompt phrase the session-start ritual includes for minted sessions.
-MINT_SIGNAL = "New session minted in-workbench"
+# The boot-prompt signal the session-start ritual includes for minted sessions
+# — a PREFIX, substring-matched, so every minting seat qualifies ("…minted
+# in-workbench", "…minted in-scratchpad") and every legacy boot still carries it.
+MINT_SIGNAL = "New session minted in-"
 
 _KEY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
 

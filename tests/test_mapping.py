@@ -56,3 +56,12 @@ def test_candidates_ranked_by_delay_signal_first(tmp_path):
 
     loose = find_transcripts_for_key(tmp_path, KEY, require_signal=False)
     assert [m.cc_session_uuid[:8] for m in loose] == ["22222222", "11111111", "44444444"]
+
+
+def test_mint_signal_prefix_matches_every_minting_seat():
+    # has_mint_signal is a substring check, so the seat-agnostic PREFIX must
+    # sit inside both minting seats' boot phrases — legacy workbench boots
+    # keep matching, scratchpad-minted sessions start matching.
+    from cjm_harness_transcripts.mapping import MINT_SIGNAL
+    assert MINT_SIGNAL in "New session minted in-workbench"
+    assert MINT_SIGNAL in "New session minted in-scratchpad"

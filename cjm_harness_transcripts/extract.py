@@ -1,8 +1,11 @@
 """User-facing prose extraction — both sides, one truth.
 
 Filters a transcript's active path down to what the humans actually read:
-assistant text blocks (no thinking, no tool calls/results) and user prompts
-(minus harness wrappers — caveat blocks, system reminders, command noise).
+assistant text blocks (no thinking, no tool calls/results), user prompts
+(minus harness wrappers — caveat blocks, system reminders, command noise),
+and the curated tool parameters the client renders as discourse
+(TOOL_PARAM_PROSE — a SendUserFile caption is prose living in tool_use
+input; finding 60d719fe).
 The transcript stores assistant messages as RAW MARKDOWN SOURCE (rendering is
 client-layered — verified DEC 671e9b11 point 9), so extracted text is the
 authoritative body for a Message node, not a rendering of it.
@@ -31,6 +34,18 @@ _WRAPPER_RE = re.compile(
     "|".join(rf"<{t}>.*?</{t}>" for t in _WRAPPER_TAGS), re.DOTALL
 )
 
+# Tool parameters that carry user-facing prose (finding 60d719fe): the client
+# renders these as discourse (a SendUserFile caption rides the file card), but
+# the record holds only a tool_use block, so text-block extraction misses them.
+# Curated allowlist: tool name -> dotted paths into the tool_use input.
+TOOL_PARAM_PROSE: dict[str, tuple[str, ...]] = {
+    "SendUserFile": ("caption",),
+}
+
+# The birth-class facet stamped on tool-param messages (one label, many sources
+# — DEC 91c47b4a pt 1; graph-side consumers mirror the literal).
+TOOL_PARAM_SOURCE = "cc-tool-param"
+
 
 @dataclass
 class ExtractedMessage:
@@ -38,8 +53,9 @@ class ExtractedMessage:
     role: str            # "user" | "assistant"
     text: str            # Cleaned prose; raw markdown source on the assistant side
     timestamp: str | None    # ISO-8601 as recorded
-    uuid: str            # The record's transcript identity
+    uuid: str            # Transcript identity (tool-param entries: the tool_use block id)
     parent_uuid: str | None  # DAG ancestry (NEXT edges mirror this succession)
+    source: str | None = None  # Birth-class facet; None = plain transcript prose
 
 
 def clean_user_text(text: str) -> str:
@@ -77,27 +93,64 @@ def _assistant_prose(rec: TranscriptRecord) -> str | None:
     return text or None
 
 
-def extract_messages(dag: TranscriptDag) -> list[ExtractedMessage]:
+def _tool_param_messages(
+    rec: TranscriptRecord,
+    table: dict[str, tuple[str, ...]],  # tool name -> dotted paths into tool_use input
+) -> list[ExtractedMessage]:
+    """Messages for user-facing prose carried in tool parameters (finding 60d719fe).
+
+    One message per prose-bearing (tool_use block, path) hit, block order.
+    Identity is the block id (the carrier record may also bear its own text
+    message, so the record uuid is taken); ancestry points at the carrier."""
+    content = rec.raw.get("message", {}).get("content")
+    if not isinstance(content, list):
+        return []
+    out: list[ExtractedMessage] = []
+    for i, block in enumerate(content):
+        if not (isinstance(block, dict) and block.get("type") == "tool_use"):
+            continue
+        for path in table.get(block.get("name", ""), ()):
+            value = block.get("input")
+            for part in path.split("."):
+                value = value.get(part) if isinstance(value, dict) else None
+            if not (isinstance(value, str) and value.strip()):
+                continue
+            out.append(ExtractedMessage(
+                role="assistant", text=value.strip(), timestamp=rec.timestamp,
+                uuid=block.get("id") or f"{rec.uuid}#tp{i}", parent_uuid=rec.uuid,
+                source=TOOL_PARAM_SOURCE,
+            ))
+    return out
+
+
+def extract_messages(
+    dag: TranscriptDag,
+    *,
+    tool_params: dict[str, tuple[str, ...]] | None = None,  # None = the curated TOOL_PARAM_PROSE table; {} disables
+) -> list[ExtractedMessage]:
     """The active path's user-facing messages, chronological.
 
     One ExtractedMessage per prose-bearing record: an assistant turn that
     interleaves status prose between tool calls yields one message per text
-    record, exactly as the client displayed them."""
+    record, exactly as the client displayed them. Prose the client renders out
+    of tool_use parameters (the curated table — finding 60d719fe) extracts as
+    its own TOOL_PARAM_SOURCE-faceted message after the record's text."""
+    table = TOOL_PARAM_PROSE if tool_params is None else tool_params
     messages: list[ExtractedMessage] = []
     for rec in dag.active_path():
         if rec.type == "user":
-            text = _user_prose(rec)
+            text, extras = _user_prose(rec), []
         elif rec.type == "assistant":
-            text = _assistant_prose(rec)
+            text, extras = _assistant_prose(rec), _tool_param_messages(rec, table)
         else:
             continue
-        if text is None:
-            continue
-        messages.append(ExtractedMessage(
-            role=rec.type,
-            text=text,
-            timestamp=rec.timestamp,
-            uuid=rec.uuid,
-            parent_uuid=rec.parent_uuid,
-        ))
+        if text is not None:
+            messages.append(ExtractedMessage(
+                role=rec.type,
+                text=text,
+                timestamp=rec.timestamp,
+                uuid=rec.uuid,
+                parent_uuid=rec.parent_uuid,
+            ))
+        messages.extend(extras)
     return messages
