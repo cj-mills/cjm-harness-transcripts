@@ -2,7 +2,7 @@
 
 <!-- generated from the context graph by `cjm-context-graph readme` — do not edit by hand; edit the graph (the urge to hand-edit = move it on-graph) -->
 
-_No purpose recorded on-graph yet — author it with_ `assert 64d33989-f107-5495-ad93-45aff3dcf5ef purpose "…"` _(or by the repo's entity key)._
+Harness-transcript extraction library: reads Claude Code session transcripts (JSONL DAGs), walks the active path, and extracts the user-facing prose — assistant markdown bodies, cleaned user prompts, and curated tool-parameter prose (e.g. SendUserFile captions) — as ExtractedMessages ready to mint onto a context-graph session spine.
 
 ## Modules
 
