@@ -29,6 +29,7 @@ _WRAPPER_TAGS = (
     "command-contents",
     "local-command-stdout",
     "local-command-stderr",
+    "task-notification",  # harness-authored; extracted separately as role="harness" (finding 47b83adb)
 )
 _WRAPPER_RE = re.compile(
     "|".join(rf"<{t}>.*?</{t}>" for t in _WRAPPER_TAGS), re.DOTALL
@@ -50,7 +51,7 @@ TOOL_PARAM_SOURCE = "cc-tool-param"
 @dataclass
 class ExtractedMessage:
     """One user-facing message off the active path, ready to become a Message node."""
-    role: str            # "user" | "assistant"
+    role: str            # "user" | "assistant" | "harness"
     text: str            # Cleaned prose; raw markdown source on the assistant side
     timestamp: str | None    # ISO-8601 as recorded
     uuid: str            # Transcript identity (tool-param entries: the tool_use block id)
@@ -80,6 +81,30 @@ def _user_prose(rec: TranscriptRecord) -> str | None:
         return None
     cleaned = clean_user_text(text)
     return cleaned or None
+
+
+def _harness_notice(rec: TranscriptRecord) -> str | None:
+    """A harness task-notification record's distilled summary, or None (finding 47b83adb).
+
+    A record counts only when nothing but notification blocks remains after
+    wrapper stripping — a (never-observed) mixed record stays a user message,
+    its blocks stripped by _WRAPPER_RE. Multiple blocks join as one notice."""
+    content = rec.raw.get("message", {}).get("content")
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        text = "\n\n".join(b.get("text", "") for b in content
+                           if isinstance(b, dict) and b.get("type") == "text")
+    else:
+        return None
+    blocks = _TASK_NOTIFICATION_RE.findall(text)
+    if not blocks or clean_user_text(text):
+        return None
+    summaries = []
+    for block in blocks:
+        m = _NOTIFICATION_SUMMARY_RE.search(block)
+        summaries.append((m.group(1) if m else block).strip())
+    return "\n\n".join(s for s in summaries if s) or None
 
 
 def _assistant_prose(rec: TranscriptRecord) -> str | None:
@@ -134,11 +159,21 @@ def extract_messages(
     interleaves status prose between tool calls yields one message per text
     record, exactly as the client displayed them. Prose the client renders out
     of tool_use parameters (the curated table — finding 60d719fe) extracts as
-    its own TOOL_PARAM_SOURCE-faceted message after the record's text."""
+    its own TOOL_PARAM_SOURCE-faceted message after the record's text. Harness
+    task-notification records (finding 47b83adb) extract as role="harness",
+    HARNESS_SOURCE-faceted, distilled to the summary line."""
     table = TOOL_PARAM_PROSE if tool_params is None else tool_params
     messages: list[ExtractedMessage] = []
     for rec in dag.active_path():
         if rec.type == "user":
+            notice = _harness_notice(rec)
+            if notice is not None:
+                messages.append(ExtractedMessage(
+                    role="harness", text=notice, timestamp=rec.timestamp,
+                    uuid=rec.uuid, parent_uuid=rec.parent_uuid,
+                    source=HARNESS_SOURCE,
+                ))
+                continue
             text, extras = _user_prose(rec), []
         elif rec.type == "assistant":
             text, extras = _assistant_prose(rec), _tool_param_messages(rec, table)
@@ -154,3 +189,15 @@ def extract_messages(
             ))
         messages.extend(extras)
     return messages
+
+
+# Harness-authored task notifications (finding 47b83adb): background-task and
+# agent completion notices land as role=user records but are authored by the
+# harness — neither party's prose. They extract as role="harness" messages,
+# text distilled to the <summary> line (an agent notice's <result> payload is
+# harness plumbing; the assistant's relay turn carries what mattered).
+HARNESS_SOURCE = "cc-harness"
+_TASK_NOTIFICATION_RE = re.compile(
+    r"<task-notification>(.*?)</task-notification>", re.DOTALL
+)
+_NOTIFICATION_SUMMARY_RE = re.compile(r"<summary>(.*?)</summary>", re.DOTALL)

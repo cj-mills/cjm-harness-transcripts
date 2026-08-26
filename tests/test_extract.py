@@ -1,7 +1,7 @@
 """Extraction: user-facing prose both sides, wrappers stripped, tool traffic dropped."""
 
 from cjm_harness_transcripts.extract import (
-    TOOL_PARAM_SOURCE, clean_user_text, extract_messages)
+    HARNESS_SOURCE, TOOL_PARAM_SOURCE, clean_user_text, extract_messages)
 from cjm_harness_transcripts.records import TranscriptDag
 
 from conftest import rec
@@ -85,6 +85,50 @@ def test_tool_param_prose_extracts_as_faceted_message(make_transcript):
     assert caption.uuid == "toolu_1" and caption.parent_uuid == "a1"
     assert caption.source == TOOL_PARAM_SOURCE
     assert messages[0].source is None and messages[1].source is None
+
+
+def test_task_notification_extracts_as_harness_message(make_transcript):
+    # The finding-47b83adb class: a background-task completion notice lands as
+    # a role=user record but is harness-authored — it extracts as a third
+    # author (role="harness", cc-harness facet), distilled to the summary line.
+    # Record identity is kept (the retro-sweep edits existing nodes in place).
+    notification = (
+        "<task-notification>\n<task-id>abc123</task-id>\n"
+        "<tool-use-id>toolu_9</tool-use-id>\n<status>completed</status>\n"
+        '<summary>Background command "Run sweep" completed (exit code 0)</summary>\n'
+        "</task-notification>"
+    )
+    path = make_transcript([
+        rec("user", "u1", None, ts="2026-08-22T20:00:00.000Z", content="kick it off"),
+        rec("assistant", "a1", "u1", ts="2026-08-22T20:00:05.000Z",
+            content=[{"type": "text", "text": "Running in the background."}]),
+        rec("user", "n1", "a1", ts="2026-08-22T20:05:00.000Z", content=notification),
+        rec("assistant", "a2", "n1", ts="2026-08-22T20:05:10.000Z",
+            content=[{"type": "text", "text": "All green."}]),
+    ])
+    messages = extract_messages(TranscriptDag.load(path))
+    assert [(m.role, m.text) for m in messages] == [
+        ("user", "kick it off"),
+        ("assistant", "Running in the background."),
+        ("harness", 'Background command "Run sweep" completed (exit code 0)'),
+        ("assistant", "All green."),
+    ]
+    notice = messages[2]
+    assert notice.uuid == "n1" and notice.parent_uuid == "a1"
+    assert notice.source == HARNESS_SOURCE
+    # An agent notice's <result> payload is plumbing — only the summary survives.
+    agent_notice = (
+        "<task-notification>\n<task-id>x</task-id>\n"
+        '<summary>Agent "Survey" finished</summary>\n'
+        "<result>## a very long report</result>\n</task-notification>"
+    )
+    path = make_transcript([rec("user", "n2", None,
+                                ts="2026-08-22T20:06:00.000Z",
+                                content=[{"type": "text", "text": agent_notice}])],
+                           name="bbbb1111-2222-3333-4444-555566667777.jsonl")
+    messages = extract_messages(TranscriptDag.load(path))
+    assert [(m.role, m.text) for m in messages] == [
+        ("harness", 'Agent "Survey" finished')]
 
 
 def test_tool_param_table_is_curated_and_optional(make_transcript):
