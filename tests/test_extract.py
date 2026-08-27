@@ -1,7 +1,8 @@
 """Extraction: user-facing prose both sides, wrappers stripped, tool traffic dropped."""
 
 from cjm_harness_transcripts.extract import (
-    HARNESS_SOURCE, TOOL_PARAM_SOURCE, clean_user_text, extract_messages)
+    HARNESS_SOURCE, THINKING_SUMMARY_SOURCE, TOOL_PARAM_SOURCE, clean_user_text,
+    extract_messages)
 from cjm_harness_transcripts.records import TranscriptDag
 
 from conftest import rec
@@ -31,7 +32,7 @@ def test_extract_keeps_both_sides_and_drops_tool_traffic(make_transcript):
         rec("user", "t1", "a1", ts="2026-08-20T22:00:04.000Z",
             content=[{"type": "tool_result", "content": "output"}]),
         rec("assistant", "a2", "t1", ts="2026-08-20T22:00:08.000Z",
-            content=[{"type": "thinking", "thinking": "private"},
+            content=[{"type": "thinking", "thinking": ""},   # pre-2.1.246: empty
                      {"type": "text", "text": "**Found it.**"}]),
     ])
     messages = extract_messages(TranscriptDag.load(path))
@@ -151,3 +152,27 @@ def test_tool_param_table_is_curated_and_optional(make_transcript):
     ], name="bbbb1111-2222-3333-4444-555566667777.jsonl")
     assert [m.text for m in extract_messages(TranscriptDag.load(captioned))] == ["real"]
     assert extract_messages(TranscriptDag.load(captioned), tool_params={}) == []
+
+
+def test_thinking_summary_extracts_as_faceted_assistant_message(make_transcript):
+    # Claude Code 2.1.246+ persists the model's summary of a reasoning run as
+    # the thinking block's text (item 6c3a0118): it extracts as role=assistant
+    # + THINKING_SUMMARY_SOURCE, LEADS the record's own prose in the sequence,
+    # keeps a block-indexed identity (the carrier's uuid stays with its text),
+    # and an EMPTY thinking block (the pre-2.1.246 shape) still yields nothing.
+    path = make_transcript([
+        rec("user", "u1", None, ts="2026-08-26T22:00:00.000Z", content="Go"),
+        rec("assistant", "a1", "u1", ts="2026-08-26T22:00:03.000Z",
+            content=[{"type": "thinking", "thinking": ""},
+                     {"type": "thinking", "thinking": "I've confirmed the thread."},
+                     {"type": "tool_use", "name": "Bash", "input": {}},
+                     {"type": "text", "text": "Checking."}]),
+    ])
+    messages = extract_messages(TranscriptDag.load(path))
+    assert [(m.role, m.text, m.source) for m in messages] == [
+        ("user", "Go", None),
+        ("assistant", "I've confirmed the thread.", THINKING_SUMMARY_SOURCE),
+        ("assistant", "Checking.", None),
+    ]
+    assert messages[1].uuid == "a1#th1" and messages[1].parent_uuid == "a1"
+    assert messages[2].uuid == "a1"

@@ -47,6 +47,17 @@ TOOL_PARAM_PROSE: dict[str, tuple[str, ...]] = {
 # — DEC 91c47b4a pt 1; graph-side consumers mirror the literal).
 TOOL_PARAM_SOURCE = "cc-tool-param"
 
+# The birth-class facet stamped on persisted THINKING SUMMARIES (item 6c3a0118):
+# Claude Code 2.1.246+ stores a model-generated summary of a reasoning run as
+# the thinking block's text (the client renders it "(summarized)"); earlier
+# harness versions persisted thinking blocks EMPTY (signature only). No on-disk
+# marker separates a summary from raw thinking — the harness never persists
+# raw thinking, so any non-empty thinking text IS the displayed summary.
+# Agent-origin (the model summarizing its own reasoning; the harness only
+# stores it), so role stays "assistant" — the facet lets consumers style or
+# filter it apart from authored prose.
+THINKING_SUMMARY_SOURCE = "cc-thinking-summary"
+
 
 @dataclass
 class ExtractedMessage:
@@ -148,6 +159,33 @@ def _tool_param_messages(
     return out
 
 
+def _thinking_summary_messages(rec: TranscriptRecord) -> list[ExtractedMessage]:
+    """Messages for persisted thinking summaries (item 6c3a0118).
+
+    One message per NON-EMPTY thinking block, block order — pre-2.1.246
+    transcripts persisted thinking blocks empty and yield nothing here, so
+    old eras need no backfill. Identity is the record uuid suffixed by the
+    block index (the carrier record usually bears its own text message, so
+    the bare uuid is taken — the tool-param convention); ancestry points at
+    the carrier. Raw text verbatim, like assistant prose."""
+    content = rec.raw.get("message", {}).get("content")
+    if not isinstance(content, list):
+        return []
+    out: list[ExtractedMessage] = []
+    for i, block in enumerate(content):
+        if not (isinstance(block, dict) and block.get("type") == "thinking"):
+            continue
+        text = block.get("thinking")
+        if not (isinstance(text, str) and text.strip()):
+            continue
+        out.append(ExtractedMessage(
+            role="assistant", text=text.strip(), timestamp=rec.timestamp,
+            uuid=f"{rec.uuid}#th{i}", parent_uuid=rec.uuid,
+            source=THINKING_SUMMARY_SOURCE,
+        ))
+    return out
+
+
 def extract_messages(
     dag: TranscriptDag,
     *,
@@ -176,6 +214,10 @@ def extract_messages(
                 continue
             text, extras = _user_prose(rec), []
         elif rec.type == "assistant":
+            # Thinking summaries LEAD the record's prose (block order: the
+            # thinking block precedes the text — item 6c3a0118); tool-param
+            # prose trails it, as before. Succession follows this list order.
+            messages.extend(_thinking_summary_messages(rec))
             text, extras = _assistant_prose(rec), _tool_param_messages(rec, table)
         else:
             continue
