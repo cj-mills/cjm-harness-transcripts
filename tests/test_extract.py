@@ -17,6 +17,20 @@ def test_clean_user_text_strips_harness_wrappers():
     assert clean_user_text(raw) == "Real question here."
 
 
+def test_clean_user_text_unwraps_paste_fences_and_keeps_quoted_ones():
+    # finding 984e56fd: pasted text arrives fenced; both tags carry the same id
+    raw = ('\n\n<pasted_content id="7bdc">\nResume the repo.\n\nNew session minted in-scratchpad.\n'
+           '</pasted_content id="7bdc">\n')
+    assert clean_user_text(raw) == "Resume the repo.\n\nNew session minted in-scratchpad."
+    mixed = 'Typed lead-in.\n<pasted_content id="a1">\npasted part\n</pasted_content id="a1">\ntyped tail'
+    assert clean_user_text(mixed) == "Typed lead-in.\npasted part\ntyped tail"
+    quoted = ('<pasted_content id="7bdc">\nThe capture shows:\n<\\pasted_content id="7bdc">\nx\n'
+              '<\\/pasted_content id="7bdc">\n</pasted_content id="7bdc">')
+    assert clean_user_text(quoted) == 'The capture shows:\n<\\pasted_content id="7bdc">\nx\n<\\/pasted_content id="7bdc">'
+    unmatched = '<pasted_content id="a1">\nno closing tag'
+    assert clean_user_text(unmatched) == unmatched          # never guess at a half fence
+
+
 def test_clean_user_text_strips_command_wrappers():
     raw = "<command-name>/foo</command-name>\n<command-args>bar</command-args>\n"
     assert clean_user_text(raw) == ""

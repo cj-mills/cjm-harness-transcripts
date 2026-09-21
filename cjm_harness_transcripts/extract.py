@@ -34,6 +34,11 @@ _WRAPPER_TAGS = (
 _WRAPPER_RE = re.compile(
     "|".join(rf"<{t}>.*?</{t}>" for t in _WRAPPER_TAGS), re.DOTALL
 )
+# The paste fence (Claude Code, sighted 2026-09-20; finding 984e56fd): text the user PASTES
+# into the prompt arrives wrapped in a tag pair that BOTH carry the same random id. Unlike a
+# wrapper block the inside IS the user's prose, so the fence is unwrapped, never dropped.
+# Only the exact form matches — a fence the user merely quotes or escapes stays as written.
+_PASTE_FENCE_RE = re.compile(r'<pasted_content id="([^"<>]+)">\n?(.*?)\n?</pasted_content id="\1">', re.DOTALL)
 
 # Tool parameters that carry user-facing prose (finding 60d719fe): the client
 # renders these as discourse (a SendUserFile caption rides the file card), but
@@ -71,8 +76,10 @@ class ExtractedMessage:
 
 
 def clean_user_text(text: str) -> str:
-    """Strip harness wrapper blocks from a user prompt; collapse the scar tissue."""
+    """Strip harness wrapper blocks from a user prompt, unwrap paste fences (the inside
+    is the user's own prose); collapse the scar tissue."""
     text = _WRAPPER_RE.sub("", text)
+    text = _PASTE_FENCE_RE.sub(lambda m: m.group(2), text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
