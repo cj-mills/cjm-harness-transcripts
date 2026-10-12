@@ -50,6 +50,7 @@ def parse_record_timestamp(ts: str) -> datetime:
 @dataclass
 class BootInfo:
     """The first user prose of a transcript — the mapping's evidence."""
+
     text: str
     timestamp: datetime
     has_mint_signal: bool
@@ -74,6 +75,7 @@ def read_boot_info(path: str | Path) -> BootInfo | None:
 @dataclass
 class TranscriptMatch:
     """One ranked candidate pairing for a session key."""
+
     path: Path
     cc_session_uuid: str     # The transcript's filename stem IS the CC session UUID
     boot: BootInfo

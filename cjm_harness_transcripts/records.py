@@ -22,6 +22,7 @@ from pathlib import Path
 @dataclass
 class TranscriptRecord:
     """One JSONL record, uuid-addressable or not, with the raw dict preserved."""
+
     type: str            # Record type: user / assistant / system / housekeeping kinds
     uuid: str | None     # Addressable identity (None on housekeeping records)
     parent_uuid: str | None  # The DAG edge; None on roots and housekeeping records
@@ -61,6 +62,7 @@ def load_records(path: str | Path) -> list[TranscriptRecord]:
 @dataclass
 class TranscriptDag:
     """The uuid-addressable view of a transcript: parent edges, forks, active path."""
+
     records: list[TranscriptRecord]
     by_uuid: dict[str, TranscriptRecord] = field(init=False)
     children: dict[str, list[TranscriptRecord]] = field(init=False)

@@ -67,6 +67,7 @@ THINKING_SUMMARY_SOURCE = "cc-thinking-summary"
 @dataclass
 class ExtractedMessage:
     """One user-facing message off the active path, ready to become a Message node."""
+
     role: str            # "user" | "assistant" | "harness"
     text: str            # Cleaned prose; raw markdown source on the assistant side
     timestamp: str | None    # ISO-8601 as recorded
