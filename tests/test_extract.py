@@ -1,8 +1,7 @@
 """Extraction: user-facing prose both sides, wrappers stripped, tool traffic dropped."""
 
-from cjm_harness_transcripts.extract import (
-    HARNESS_SOURCE, THINKING_SUMMARY_SOURCE, TOOL_PARAM_SOURCE, clean_user_text,
-    extract_messages)
+from cjm_harness_transcripts.extract import (clean_user_text, extract_messages, HARNESS_SOURCE,
+                                             THINKING_SUMMARY_SOURCE, TOOL_PARAM_SOURCE)
 from cjm_harness_transcripts.records import TranscriptDag
 
 from conftest import rec

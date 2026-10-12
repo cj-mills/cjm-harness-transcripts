@@ -1,6 +1,6 @@
 """The record layer: tolerant loading + DAG walks over rewind forks."""
 
-from cjm_harness_transcripts.records import TranscriptDag, load_records
+from cjm_harness_transcripts.records import load_records, TranscriptDag
 
 from conftest import rec
 

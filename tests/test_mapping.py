@@ -3,13 +3,8 @@
 from datetime import timedelta, timezone
 
 import pytest
-
-from cjm_harness_transcripts.mapping import (
-    MINT_SIGNAL,
-    find_transcripts_for_key,
-    parse_session_key,
-    read_boot_info,
-)
+from cjm_harness_transcripts.mapping import (find_transcripts_for_key, MINT_SIGNAL,
+                                             parse_session_key, read_boot_info)
 
 from conftest import rec, write_jsonl
 
