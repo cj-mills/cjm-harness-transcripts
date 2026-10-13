@@ -16,7 +16,7 @@ Harness-transcript extraction library: reads Claude Code session transcripts (JS
 ### `cjm_harness_transcripts.extract`
 
 - `ExtractedMessage` _class_ — One user-facing message off the active path, ready to become a Message node.
-- `clean_user_text` _function_ — Strip harness wrapper blocks from a user prompt; collapse the scar tissue.
+- `clean_user_text` _function_ — Strip harness wrapper blocks from a user prompt, unwrap paste fences (the inside
 - `extract_messages` _function_ — The active path's user-facing messages, chronological.
 
 ### `cjm_harness_transcripts.mapping`
@@ -36,4 +36,4 @@ Harness-transcript extraction library: reads Claude Code session transcripts (JS
 
 ## Dependencies
 
-**Used by:** `cjm-context-graph-projection`
+**Used by:** `cjm-context-graph-projection`, `cjm-session-scratchpad-qt`, `cjm-substrate-qt-kit`
